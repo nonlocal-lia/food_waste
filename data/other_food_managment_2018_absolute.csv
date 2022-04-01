@@ -1,8 +1,8 @@
-,Material,Amount
-0,Food - animal feed,"1,820"
-1,Food - bio-based materials/biochemical processing,"1,840"
-2,Food – codigestion/anaerobic digestion,"5,260"
-3,Food - donation,"4,790"
-4,Food - land application,260
-5,Food – sewer/wastewater treatment,"3,740"
-6,Total Food – other food management,"17,710"
+Material,2018
+Food - animal feed,"1,820"
+Food - bio-based materials/biochemical processing,"1,840"
+Food – codigestion/anaerobic digestion,"5,260"
+Food - donation,"4,790"
+Food - land application,260
+Food – sewer/wastewater treatment,"3,740"
+Total Food – other food management,"17,710"

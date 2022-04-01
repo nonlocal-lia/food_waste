@@ -1,7 +1,5 @@
-,Food - composted,Unnamed: 0,Unnamed: 1,Unnamed: 2,Unnamed: 3,Unnamed: 4,Unnamed: 5,Unnamed: 6,Unnamed: 7,Unnamed: 8,Unnamed: 9
-0,Food^,Neg.,Neg.,Neg.,Neg.,680,690,970,"2,100","2,570","2,590"
-1,Yard Trimmings - composted,,,,,,,,,,
-2,Yard Trimmings,Neg.,Neg.,Neg.,"4,200","15,770","19,860","19,200","21,290","24,420","22,300"
-3,Misc. Inorganic Wastes - composted,,,,,,,,,,
-4,Miscellaneous Inorganic Wastes,Neg.,Neg.,Neg.,Neg.,Neg.,Neg.,Neg.,Neg.,Neg.,Neg.
-5,Total - composted,Neg.,Neg.,Neg.,"4,200","16,450","20,550","20,170","23,390","26,990","24,890"
+Material,1960,1970,1980,1990,2000,2005,2010,2015,2017,2018
+Food^,Neg.,Neg.,Neg.,Neg.,680,690,970,"2,100","2,570","2,590"
+Yard Trimmings,Neg.,Neg.,Neg.,"4,200","15,770","19,860","19,200","21,290","24,420","22,300"
+Miscellaneous Inorganic Wastes,Neg.,Neg.,Neg.,Neg.,Neg.,Neg.,Neg.,Neg.,Neg.,Neg.
+Total - composted,Neg.,Neg.,Neg.,"4,200","16,450","20,550","20,170","23,390","26,990","24,890"
