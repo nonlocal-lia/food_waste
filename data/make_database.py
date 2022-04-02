@@ -3,58 +3,81 @@ import pandas as pd
 import sqlite3
 from os.path import exists
 
-def clean_pdf_data(df, metal_label_row=None, compost=False, col_label_data=False, split_row=False, other_wastes_label=False):
-    if split_row:
-        df.drop([df.shape[0]-3], inplace=True)
-        df.replace('Wastes', 'Miscellaneous Inorganic Wastes', inplace=True)
-
-    # removing metal and other wastes rows that were just labels in table and relabing data for clarity
-    if metal_label_row:
-        for n in range(1,4):
-            df.iloc[metal_label_row  +n, 0] = df.iloc[metal_label_row, 0] +" - "+df.iloc[metal_label_row + n, 0]
-        df.drop([metal_label_row], inplace=True)
-    
-    if other_wastes_label:
-        df.drop([13], inplace=True)
-    
-    if compost:
-        df.drop([1,3], inplace=True)
-
-    # if column labels are actual data, copying data into table
-    if col_label_data:
+def clean_pdf_data(df, years):
+    # Dealing with rows mistaken as headers
+    if df.columns[1] != '1960':
         df = df.columns.to_frame().T.append(df, ignore_index=True)
     
-    # renaming columns and setting index to row labels
-    df.rename(columns={df.columns[0]: 'Material'}, inplace=True)
-    df.set_index('Material', inplace=True)
+    # Dealing with header and calculated total rows
+    header_rows = []
+    for i, val in enumerate(df.iloc[:,0]):
+        if val == 'Metals':
+            header_rows.append(i)
+            # relabeling  metal data for clarity
+            for n in range(1,4):
+                df.iloc[i+n, 0] = df.iloc[i, 0] +" - "+df.iloc[i+n, 0]
+        elif val == 'Other Wastes':
+            header_rows.append(i)
+        elif 'composted' in val:
+            header_rows.append(i)
+        elif 'Inorganic' in val and 'Inorganic Wastes' not in val:
+            header_rows.append(i)
+            #Fixing split label
+            df.iloc[i+1, 0] = df.iloc[i, 0] +" "+ df.iloc[i+1, 0]
+        elif 'Total' in val:
+            header_rows.append(i)
+    
+    if len(header_rows):
+        df.drop(header_rows, inplace=True)
+    
+    # renaming columns
+    column_labels = ['Material']
+    column_labels.extend(years)
+    df.columns=column_labels
 
     # Filling missing values
     df.replace('Neg.', 0, inplace=True)
     df.fillna('null', inplace=True)
+    
+    # Resetting Index
+    df.reset_index(inplace=True)
+    df.drop(columns=['index'], inplace=True)
     return df
 
 def merge_split_table(df1, df2):
+    # column title is actually a value, creating row from column title
+    if 'Food' in df1.columns[0]:
+        df1 = df1.columns.to_frame().T.append(df1, ignore_index=True)
+    if df2.columns[0] != '2018':
+        df2 = df2.columns.to_frame().T.append(df2, ignore_index=True)
+    
+    # Fixing column name
+    df1.columns = ['Material']
+    df2.columns = ['2018']
+    
+    # Finding Error Rows
+    error_rows = []
+    for i, val in enumerate(df1['Material']):
+        if 'Food' not in val:
+            error_rows.append(i)
+    error_rows
+    
     # Fixing labels that interpreter treated as seperate lines
-    df1.iloc[0,0] = df1.iloc[0,0] + ' ' + df1.iloc[1,0]
-    df1.iloc[2,0] = df1.iloc[2,0] + ' ' + df1.iloc[3,0]
-    df1.iloc[6,0] = df1.iloc[6,0] + ' ' + df1.iloc[7,0]
+    for row in error_rows:
+        df1.iloc[row-1,0] = df1.iloc[row-1,0] + ' ' + df1.iloc[row,0]
 
     # droping extra lines
-    df1.drop([1,3,7] ,inplace=True)
+    df1.drop(error_rows ,inplace=True)
 
     # resetting index
     df1.reset_index(inplace=True)
     df1.drop(columns=['index'], inplace=True)
 
-    # column title is actually a value, creating row from column title
-    df1 = df1.columns.to_frame().T.append(df1, ignore_index=True)
-    
-    # column title is actually a value, creating row from column title
-    df2 = df2.columns.to_frame().T.append(df2, ignore_index=True)
-
-    # Joining and relabeling columns
+    # Joining dfs
     output = pd.concat([df1, df2], axis=1)
-    output.columns = ['Material', '2018']
+    
+    # dropping calculated row
+    output.drop([output.shape[0]-1], inplace=True)
     return output
 
 def populate_disposal_table(cursor):
@@ -74,23 +97,17 @@ def populate_disposal_table(cursor):
                        """.format(d))
     return None
 
-def populate_material_table(cursor):
-    materials = ['Paper and Paperboard',
-                 'Glass',
-                 'Metals - Ferrous',
-                 'Metals - Aluminum',
-                 'Metals - Other Nonferrous',
-                 'Plastics',
-                 'Rubber and Leather',
-                 'Textiles',
-                 'Wood',
-                 'Other',
-                 'Food',
-                 'Yard Trimmings',
-                 'Miscellaneous Inorganic Wastes']
+def populate_material_table(cursor, materials):
+    # replacing asterixed label
+    for i, material in enumerate(materials):
+        if material == 'Other **':
+            materials[i] = 'Other Product'
+            
+    # pulling out sub groups    
     products = materials[0:-3]
     metals = materials[2:5]
-
+    
+    # populating database
     for m in materials:
         product = 0
         material_type = m
@@ -103,98 +120,45 @@ def populate_material_table(cursor):
                     """.format(product, material_type, m))
     return None
 
-def add_waste_category(df, years, cursor, recycle=False, compost=False, combust=False, landfill=False, oth=False):
-    
-    #Determining what rows to exclude
-    if combust:
-        drop_list = [5,11,15,16]
-        disposal_id = 1
-    if compost:
-        drop_list = [3]
-        disposal_id = 2
-    if recycle:
-        drop_list = [5,11]
-        disposal_id = 3
-    if landfill:
-        drop_list = [5,11,15]
-        disposal_id = 4
-    if oth:
-        drop_list = [6]
-  
-    if landfill or combust or recycle or compost:
-        # Preparing df
-        df.reset_index(inplace=True)
-        df.drop(drop_list, inplace=True)
-        df.reset_index(inplace=True)
-        df.drop(columns=['index'], inplace=True)
-        # Populating database
-        for row in df.index:
-            if compost:
-                material_id = row+11
-            else:
-                material_id = row+1
-            for i, year in enumerate(years):
-                amount = df.iloc[row, i+1]
+def populate_waste_table(df_dict, years, cursor):
+    compost_id = pd.read_sql("""SELECT id FROM disposal WHERE disposal_type = 'composting'""", conn).iloc[0,0]
+    for disposal_id, df in df_dict.items():
+        oth = False
+        if disposal_id == 5:
+            oth = True
+
+        if oth:
+            # Populating database
+            material_id = pd.read_sql("""SELECT id FROM material WHERE material_type = 'Food'""", conn).iloc[0,0]
+            for row in df.index:
+                year = 2018
+                amount = df.iloc[row, 1]
+                disposal_id = row+5
                 if amount == 'null':
                     cursor.execute("""INSERT INTO waste (material_id, disposal_id, year, waste_in_tons) 
                                     VALUES ('{}', '{}', '{}', NULL);
-                                """.format(material_id, disposal_id, year))
+                                    """.format(material_id, disposal_id, year))
                 else:
                     cursor.execute("""INSERT INTO waste (material_id, disposal_id, year, waste_in_tons) 
                                     VALUES ('{}', '{}', '{}', '{}');
-                                """.format(material_id, disposal_id, year, amount))   
-
-    if oth:
-        # Preparing df
-        df.drop(drop_list, inplace=True)
-        df.reset_index(inplace=True)
-        df.drop(columns=['index'], inplace=True)
-        # Populating database
-        material_id = 11
-        for row in df.index:
-            year = 2018
-            amount = df.iloc[row, 1]
-            disposal_id = row+5
-            if amount == 'null':
-                cursor.execute("""INSERT INTO waste (material_id, disposal_id, year, waste_in_tons) 
-                                    VALUES ('{}', '{}', '{}', NULL);
-                                """.format(material_id, disposal_id, year))
-            else:
-                cursor.execute("""INSERT INTO waste (material_id, disposal_id, year, waste_in_tons) 
-                                    VALUES ('{}', '{}', '{}', '{}');
-                                """.format(material_id, disposal_id, year, amount))
-    return None
-
-def populate_waste_table(df_list, years, cursor):
-    for df in df_list:
-        (landfill, combust, recycle, compost, oth) = (False, False, False, False, False)
-        if df.shape[0] == other.shape[0]:
-            oth=True
-            print("Other OK")
-        elif df.shape[0] == landfilled.shape[0]:
-            landfill = True
-            print("Landfill OK")
-        elif df.shape[0] == combusted.shape[0]:
-            combust = True
-            print("Combust OK")
-        elif df.shape[0] == composted.shape[0]:
-            compost = True
-            print("Compost OK")
-        elif df.shape[0] == recycled.shape[0]:
-            recycle = True
-            print("Recycle OK")
+                                    """.format(material_id, disposal_id, year, amount))
         else:
-            print(df)
-            print(df.shape[0])
-            raise ValueError('Dataframe is unknown or improperly formatted')
-        add_waste_category(df,
-                           years,
-                           cursor,
-                           recycle=recycle,
-                           compost=compost,
-                           combust=combust,
-                           landfill=landfill,
-                           oth=oth)
+            for row in df.index:
+                if disposal_id == compost_id:
+                    material_id = row+11
+                else:
+                    material_id = row+1
+                for i, year in enumerate(years):
+                    amount = df.iloc[row, i+1]
+                    if amount == 'null':
+                        cursor.execute("""INSERT INTO waste (material_id, disposal_id, year, waste_in_tons) 
+                                            VALUES ('{}', '{}', '{}', NULL);
+                                        """.format(material_id, disposal_id, year))
+                    else:
+                        cursor.execute("""INSERT INTO waste (material_id, disposal_id, year, waste_in_tons) 
+                                            VALUES ('{}', '{}', '{}', '{}');
+                                        """.format(material_id, disposal_id, year, amount))
+    return None
         
 
 if __name__ == '__main__':
@@ -213,15 +177,18 @@ if __name__ == '__main__':
         combusted = table[10]
         landfilled = table[12]
 
-        print(landfilled)
+        # Extracting years from columns
+        years = list(combusted.columns)
+        years.remove('Unnamed: 0')
+        years
 
         # Cleaning anomolies from tabula
-        recycled = clean_pdf_data(recycled, metal_label_row=1, col_label_data=True)
-        composted = clean_pdf_data(composted, compost=True)
-        combusted = clean_pdf_data(combusted, metal_label_row=2, other_wastes_label=True)
-        landfilled = clean_pdf_data(landfilled, metal_label_row=2, other_wastes_label=True, split_row=True)
+        recycled = clean_pdf_data(recycled, years)
+        composted = clean_pdf_data(composted, years)
+        combusted = clean_pdf_data(combusted, years)
+        landfilled = clean_pdf_data(landfilled, years)
         other = merge_split_table(other_label, other_values)
-        df_list = [combusted, composted, recycled, landfilled, other]
+        df_dict = {1: combusted, 2: composted, 3: recycled, 4: landfilled, 5: other}
 
         # Connecting to database
         conn = sqlite3.connect('wasted_data.sqlite')
@@ -241,10 +208,8 @@ if __name__ == '__main__':
                             material_type TEXT,
                             material_subtype TEXT);          
                     """)
-        populate_material_table(cur)
-        
-        years = list(combusted.columns)
-        years = list(map(int, years))
+        materials = list(combusted.iloc[:,0])
+        populate_material_table(cur, materials)
 
         # Creating disposal table
         cur.execute("""CREATE TABLE waste (
@@ -254,22 +219,21 @@ if __name__ == '__main__':
                             year INTEGER,
                             waste_in_tons INTEGER);          
                     """)
-        populate_waste_table(df_list, years, cur)
+        populate_waste_table(df_dict, years, cur)
 
-        # Saving csvs of data
+         # Testing data
         disposal = pd.read_sql("""SELECT * FROM disposal""", conn)
-        disposal.to_csv('disposal_table.csv', index=False)
         material = pd.read_sql("""SELECT * FROM material""", conn)
-        material.to_csv('material_table.csv', index=False)
         waste = pd.read_sql("""SELECT * FROM waste""", conn)
+        assert(disposal.shape == (10,2))
+        assert(material.shape == (13,4))
+        assert(waste.shape == (396,5))
+        
+        # Saving csvs of data
+        disposal.to_csv('disposal_table.csv', index=False)
+        material.to_csv('material_table.csv', index=False)
         waste.to_csv('waste_table.csv', index=False)
 
         # Committing changes and closing database
         conn.commit()
-        conn.close()
-
-        # Testing data
-        assert(disposal.shape == (10,2))
-        assert(material.shape == (13,4))
-        assert(waste.shape == (396,5))
-
+        conn.close() 
