@@ -1,0 +1,11 @@
+id,disposal_type
+1,combustion
+2,composting
+3,recycling
+4,landfill
+5,animal feed
+6,bio-based materials/biochemical processing
+7,codigestion/anaerobic digestion
+8,donation
+9,land application
+10,sewer/wastewater treatment
